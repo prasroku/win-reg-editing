@@ -26,7 +26,23 @@ RegistryDict.wow64_32("HKLM", r"Software\Vendor")   # 32-bit view (WOW6432Node)
 
 Hives: `HKLM`, `HKCU`, `HKCR`, `HKCC`, `HKU` (or their full `HKEY_...` names). Writing under `HKLM` needs an elevated terminal.
 
-`src/test_screen_saver.py` is an example that picks a random `.scr` from `C:\Windows\system32` and enables it with a 2-minute timeout.
+### Screensaver example
+
+`src/test_screen_saver.py` picks a random `.scr` from `C:\Windows\system32` and enables it with a 2-minute timeout and a password on resume.
+
+```
+.venv\Scripts\python.exe src\test_screen_saver.py
+```
+
+This changes your real screensaver settings and prints the previous values so you can put them back. To apply the settings only temporarily, use the context manager, which restores the originals when the block ends (even on an error):
+
+```python
+from libs.registry import RegistryDict
+from src.test_screen_saver import pick_screensaver, temporary_screensaver
+
+with temporary_screensaver(RegistryDict("HKCU", r"Control Panel\Desktop"), pick_screensaver()):
+    ...  # screensaver is active here
+```
 
 ## Setup
 
