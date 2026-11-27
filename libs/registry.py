@@ -79,11 +79,93 @@ class RegKey:
         "HKEY_CURRENT_CONFIG": winreg.HKEY_CURRENT_CONFIG,
         "HKEY_USERS": winreg.HKEY_USERS,
     }
+    modes = {
+        "read": winreg.KEY_READ,
+        "write": winreg.KEY_WRITE,
+        "create": winreg.KEY_ALL_ACCESS,
+    }
+
+    @classmethod
+    def check_hive(cls, hive: str) -> None:
+        if hive not in cls.hivemap:
+            raise ValueError(f"Unknown registry hive '{hive}'")
+
+    def __init__(self, hive: str, branch: str, mode: str = "read", extra_flags: int = 0) -> None:
+        self.check_hive(hive)
+        if mode not in self.modes:
+            raise ValueError(f"Unknown mode '{mode}', expected one of {sorted(self.modes)}")
+        self.hive = hive
+        self.branch = branch
+        self.mode = mode
+        self.access = self.modes[mode] | extra_flags
+        self._handle = None
+
+    def __enter__(self) -> winreg.HKEYType:
+        root = self.hivemap[self.hive]
+        try:
+            if self.mode == "create":
+                self._handle = winreg.CreateKeyEx(root, self.branch, 0, self.access)
+            else:
+                self._handle = winreg.OpenKey(root, self.branch, 0, self.access)
+        except OSError as e:
+            raise RuntimeAndKeyError(f"Failed to open registry branch '{self.hive}\\{self.branch}' ({e})") from e
+        return self._handle
+
+    def __exit__(self, *exc_info) -> bool:
+        self._handle.Close()
+        self._handle = None
+        return False
 
 
 class RegistryDict(object):
     DACL_SECURITY_INFORMATION = win32security.DACL_SECURITY_INFORMATION
     OWNER_SECURITY_INFORMATION = win32security.OWNER_SECURITY_INFORMATION
+
+    def __init__(self, hive: str, branch: str, extra_flags: int = 0) -> None:
+        RegKey.check_hive(hive)
+        self.__hive = hive
+        self.__branch = branch
+        self.__extra_flags = extra_flags
+
+    @classmethod
+    def wow64_32(cls, hive: str, branch: str) -> "RegistryDict":
+        """View of the 32-bit registry (WOW6432Node) on 64-bit Windows."""
+        return cls(hive, branch, winreg.KEY_WOW64_32KEY)
+
+    @classmethod
+    def wow64_64(cls, hive: str, branch: str) -> "RegistryDict":
+        """View of the 64-bit registry, even from a 32-bit Python."""
+        return cls(hive, branch, winreg.KEY_WOW64_64KEY)
+
+    def __getitem__(self, name: str):
+        with RegKey(self.__hive, self.__branch, "read", extra_flags=self.__extra_flags) as key:
+            try:
+                return winreg.QueryValueEx(key, name)[0]
+            except FileNotFoundError as e:
+                raise RuntimeAndKeyError(f"Registry value '{name}' not found in '{self.__branch}'") from e
+
+    def __setitem__(self, name: str, value) -> None:
+        self.setitem(name, value)
+
+    def __delitem__(self, name: str) -> None:
+        with RegKey(self.__hive, self.__branch, "write", extra_flags=self.__extra_flags) as key:
+            try:
+                winreg.DeleteValue(key, name)
+            except FileNotFoundError as e:
+                raise RuntimeAndKeyError(f"Registry value '{name}' not found in '{self.__branch}'") from e
+
+    def __contains__(self, name: str) -> bool:
+        try:
+            self[name]
+        except KeyError:
+            return False
+        return True
+
+    def get(self, name: str, default=None):
+        try:
+            return self[name]
+        except KeyError:
+            return default
 
     @property
     def branch(self):
