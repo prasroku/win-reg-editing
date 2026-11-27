@@ -1,7 +1,7 @@
 import glob
 import random
-from libs.registry import RegistryDict
 
+from libs.registry import RegistryDict
 
 user_settings_reg_hive = RegistryDict("HKCU", r"Control Panel\Desktop")
 windows_screensaver = random.choice(glob.glob((r"C:\Windows\system32\*.scr")))

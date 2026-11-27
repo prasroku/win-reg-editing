@@ -1,6 +1,7 @@
 import contextlib
-import winreg
 import itertools
+import winreg
+
 import win32security
 
 
@@ -100,9 +101,7 @@ class RegistryDict(object):
 
     def items(self) -> list:
         ret = []
-        with RegKey(
-            self.__hive, self.__branch, "read", extra_flags=self.__extra_flags
-        ) as key:
+        with RegKey(self.__hive, self.__branch, "read", extra_flags=self.__extra_flags) as key:
             counter = itertools.count()
             while item := enum_value(key, next(counter)):
                 ret.append((item[0], item[1]))
@@ -112,14 +111,9 @@ class RegistryDict(object):
         """
         Returns a list of subkey dicts
         """
-        with RegKey(
-            self.__hive, self.__branch, "read", extra_flags=self.__extra_flags
-        ) as hk:
+        with RegKey(self.__hive, self.__branch, "read", extra_flags=self.__extra_flags) as hk:
             subkeys = self.get_subkeys(hk)
-        return [
-            RegistryDict(self.__hive, self.__branch + "\\" + key, self.__extra_flags)
-            for key in subkeys
-        ]
+        return [RegistryDict(self.__hive, self.__branch + "\\" + key, self.__extra_flags) for key in subkeys]
 
     def wipe_recursive(self, key):
         # Get subkeys
@@ -144,9 +138,7 @@ class RegistryDict(object):
             yield from subkey.all_subkeys()
 
     def setitem(self, key, value, reg_type=None):
-        with RegKey(
-            self.__hive, self.__branch, "create", extra_flags=self.__extra_flags
-        ) as k:
+        with RegKey(self.__hive, self.__branch, "create", extra_flags=self.__extra_flags) as k:
             try:
                 if reg_type:
                     winreg.SetValueEx(k, key, 0, reg_type, value)
@@ -157,24 +149,18 @@ class RegistryDict(object):
                 else:
                     winreg.SetValueEx(k, key, 0, winreg.REG_SZ, value)
             except WindowsError as e:
-                raise RuntimeAndKeyError(
-                    f"Failed to write registry key '{key}' ({e})"
-                ) from e
+                raise RuntimeAndKeyError(f"Failed to write registry key '{key}' ({e})") from e
 
     def exists(self):
         try:
-            with RegKey(
-                self.__hive, self.__branch, "read", extra_flags=self.__extra_flags
-            ):
+            with RegKey(self.__hive, self.__branch, "read", extra_flags=self.__extra_flags):
                 return True
         except RuntimeAndKeyError:
             return False
 
     def create(self):
         try:
-            with RegKey(
-                self.__hive, self.__branch, "create", extra_flags=self.__extra_flags
-            ):
+            with RegKey(self.__hive, self.__branch, "create", extra_flags=self.__extra_flags):
                 return True
         except RuntimeAndKeyError:
             return False
